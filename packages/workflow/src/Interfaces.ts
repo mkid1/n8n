@@ -202,7 +202,6 @@ export abstract class ICredentialsHelper {
 		requestOptions: IHttpRequestOptions | IRequestOptionsSimplified,
 		workflow: Workflow,
 		node: INode,
-		defaultTimezone: string,
 	): Promise<IHttpRequestOptions>;
 
 	abstract preAuthentication(
@@ -223,7 +222,6 @@ export abstract class ICredentialsHelper {
 		nodeCredentials: INodeCredentialsDetails,
 		type: string,
 		mode: WorkflowExecuteMode,
-		defaultTimezone: string,
 		raw?: boolean,
 		expressionResolveValues?: ICredentialsExpressionResolveValues,
 	): Promise<ICredentialDataDecryptedObject>;
@@ -1871,7 +1869,6 @@ export interface IWorkflowExecuteAdditionalData {
 			parentWorkflowSettings?: IWorkflowSettings;
 		},
 	) => Promise<any>;
-	// hooks?: IWorkflowExecuteHooks;
 	executionId?: string;
 	restartExecutionId?: string;
 	hooks?: WorkflowHooks;
@@ -1881,7 +1878,6 @@ export interface IWorkflowExecuteAdditionalData {
 	instanceBaseUrl: string;
 	setExecutionStatus?: (status: ExecutionStatus) => void;
 	sendDataToUI?: (type: string, data: IDataObject | IDataObject[]) => void;
-	timezone: string;
 	webhookBaseUrl: string;
 	webhookWaitingBaseUrl: string;
 	webhookTestBaseUrl: string;

@@ -245,7 +245,7 @@ export class Server extends AbstractServer {
 			executionTimeout: config.getEnv('executions.timeout'),
 			maxExecutionTimeout: config.getEnv('executions.maxTimeout'),
 			workflowCallerPolicyDefaultOption: config.getEnv('workflows.callerPolicyDefaultOption'),
-			timezone: this.timezone,
+			timezone: config.getEnv('generic.timezone'),
 			urlBaseWebhook,
 			urlBaseEditor: instanceBaseUrl,
 			versionCli: '',
@@ -983,14 +983,12 @@ export class Server extends AbstractServer {
 				const additionalData = await WorkflowExecuteAdditionalData.getBase(req.user.id);
 
 				const mode: WorkflowExecuteMode = 'internal';
-				const timezone = config.getEnv('generic.timezone');
 				const credentialsHelper = new CredentialsHelper(encryptionKey);
 				const decryptedDataOriginal = await credentialsHelper.getDecrypted(
 					additionalData,
 					credential as INodeCredentialsDetails,
 					credential.type,
 					mode,
-					timezone,
 					true,
 				);
 
@@ -999,7 +997,6 @@ export class Server extends AbstractServer {
 					decryptedDataOriginal,
 					credential.type,
 					mode,
-					timezone,
 				);
 
 				const signatureMethod = oauthCredentials.signatureMethod as string;
@@ -1133,14 +1130,12 @@ export class Server extends AbstractServer {
 					const additionalData = await WorkflowExecuteAdditionalData.getBase(req.user.id);
 
 					const mode: WorkflowExecuteMode = 'internal';
-					const timezone = config.getEnv('generic.timezone');
 					const credentialsHelper = new CredentialsHelper(encryptionKey);
 					const decryptedDataOriginal = await credentialsHelper.getDecrypted(
 						additionalData,
 						credential as INodeCredentialsDetails,
 						credential.type,
 						mode,
-						timezone,
 						true,
 					);
 					const oauthCredentials = credentialsHelper.applyDefaultsAndOverwrites(
@@ -1148,7 +1143,6 @@ export class Server extends AbstractServer {
 						decryptedDataOriginal,
 						credential.type,
 						mode,
-						timezone,
 					);
 
 					const options: AxiosRequestConfig = {
