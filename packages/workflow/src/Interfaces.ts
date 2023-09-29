@@ -460,7 +460,7 @@ export interface IGetExecuteWebhookFunctions {
 		node: INode,
 		additionalData: IWorkflowExecuteAdditionalData,
 		mode: WorkflowExecuteMode,
-		webhookData: IWebhookData,
+		webhookData: { name: string },
 	): IWebhookFunctions;
 }
 
@@ -1323,6 +1323,10 @@ export interface INodeType {
 	};
 }
 
+export type WebhookNodeType = INodeType & {
+	webhook: INodeType['webhook'] & {};
+};
+
 /**
  * This class serves as the base for all nodes using the new context API
  * having this as a class enables us to identify these instances at runtime
@@ -1679,7 +1683,7 @@ export interface IWebhookResponseData {
 }
 
 export type WebhookResponseData = 'allEntries' | 'firstEntryJson' | 'firstEntryBinary' | 'noData';
-export type WebhookResponseMode = 'onReceived' | 'lastNode';
+export type WebhookResponseMode = 'onReceived' | 'lastNode' | 'responseNode';
 
 export interface INodeTypes {
 	getByName(nodeType: string): INodeType | IVersionedNodeType;
