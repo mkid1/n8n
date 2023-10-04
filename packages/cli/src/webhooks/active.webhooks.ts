@@ -51,24 +51,18 @@ export class ActiveWebhooks extends AbstractWebhooks<RegisteredActiveWebhook> {
 		request: WebhookRequest,
 		response: Response,
 	): Promise<WebhookResponseCallbackData> {
-		const { workflowId, startNode, workflow, description } = webhook;
-
-		const workflowData = this.workflows.get(workflowId);
+		const { workflow } = webhook;
+		const workflowData = this.workflows.get(workflow.id);
 		if (!workflowData) {
-			throw new NotFoundError(`Could not find workflow with id "${workflowId}"`);
+			throw new NotFoundError(`Could not find workflow with id "${workflow.id}"`);
 		}
 
 		return new Promise((resolve, reject) => {
 			void this.startWebhookExecution(
-				workflow,
-				description,
-				workflowData,
-				startNode,
-				undefined,
-				undefined,
-				undefined,
+				webhook,
 				request,
 				response,
+				workflowData,
 				(error: Error | null, data: object) => {
 					if (error !== null) reject(error);
 					else resolve(data);
@@ -87,14 +81,14 @@ export class ActiveWebhooks extends AbstractWebhooks<RegisteredActiveWebhook> {
 	): Promise<void> {
 		const webhooks = this.getWorkflowWebhooks(workflow, additionalData, undefined, true);
 		for (const webhookData of webhooks) {
-			const { workflowId } = webhookData;
+			// Get the node which has the webhook defined to know where to start from and to get additional data
 			const node = workflow.getNode(webhookData.node) as INode;
 			node.name = webhookData.node;
 
 			const path = webhookData.path;
 
 			const webhook = this.webhookService.createWebhook({
-				workflowId,
+				workflowId: webhookData.workflowId,
 				webhookPath: path,
 				node: node.name,
 				method: webhookData.httpMethod,
@@ -163,14 +157,11 @@ export class ActiveWebhooks extends AbstractWebhooks<RegisteredActiveWebhook> {
 				throw error;
 			}
 
-			// Get the node which has the webhook defined to know where to start from and to get additional data
-			const startNode = workflow.getNode(webhookData.node) as INode;
 			const pathOrId = webhook.isDynamic ? webhook.webhookId! : webhook.webhookPath;
 			this.registerWebhook(pathOrId, webhook.method, {
 				isDynamic: webhook.isDynamic,
 				webhookPath: webhook.webhookPath,
-				workflowId,
-				startNode,
+				node,
 				workflow,
 				description: webhookData.webhookDescription,
 			});

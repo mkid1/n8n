@@ -1,5 +1,12 @@
 import type { Request } from 'express';
-import type { IDataObject, IHttpRequestMethods, INode, IWebhookDescription, Workflow } from 'n8n-workflow';
+import type {
+	IDataObject,
+	IHttpRequestMethods,
+	INode,
+	INodeType,
+	IWebhookDescription,
+	Workflow,
+} from 'n8n-workflow';
 
 export type WebhookCORSRequest = Request & { method: 'OPTIONS' };
 
@@ -19,10 +26,10 @@ export interface WebhookResponseCallbackData {
 export interface RegisteredWebhook {
 	isDynamic: boolean;
 	webhookPath: string;
-	workflowId: string;
-	startNode: INode;
-	workflow: Workflow;
 	description: IWebhookDescription;
+	workflow: Workflow;
+	node: INode;
+	nodeType: INodeType;
 }
 
 export type RegisteredActiveWebhook = RegisteredWebhook;

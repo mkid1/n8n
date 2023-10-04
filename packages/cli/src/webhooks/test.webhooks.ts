@@ -76,30 +76,26 @@ export class TestWebhooks extends AbstractWebhooks<RegisteredTestWebhook> {
 		request: WebhookRequest,
 		response: Response,
 	): Promise<WebhookResponseCallbackData> {
-		const { workflowId, startNode, description, sessionId, workflow, destinationNode, timeout } =
-			webhook;
+		const { sessionId, workflow, destinationNode, timeout } = webhook;
 
-		const workflowData = this.workflows.get(workflowId);
+		const workflowData = this.workflows.get(workflow.id);
 		if (!workflowData) {
-			throw new NotFoundError(`Could not find workflow with id "${workflowId}"`);
+			throw new NotFoundError(`Could not find workflow with id "${workflow.id}"`);
 		}
 
 		return new Promise(async (resolve, reject) => {
 			try {
 				const executionId = await this.startWebhookExecution(
-					workflow,
-					description,
-					workflowData,
-					startNode,
-					sessionId,
-					undefined,
-					undefined,
+					webhook,
 					request,
 					response,
+					workflowData,
 					(error: Error | null, data: WebhookResponseCallbackData) => {
 						if (error !== null) reject(error);
 						else resolve(data);
 					},
+					undefined,
+					undefined,
 					destinationNode,
 				);
 
@@ -109,7 +105,7 @@ export class TestWebhooks extends AbstractWebhooks<RegisteredTestWebhook> {
 				if (executionId === undefined) return;
 
 				// Inform editor-ui that webhook got received
-				this.push.send('testWebhookReceived', { workflowId, executionId }, sessionId);
+				this.push.send('testWebhookReceived', { workflowId: workflow.id, executionId }, sessionId);
 			} catch {}
 
 			// Delete webhook also if an error is thrown
@@ -155,6 +151,7 @@ export class TestWebhooks extends AbstractWebhooks<RegisteredTestWebhook> {
 		}, 120000);
 
 		for (const webhookData of webhooks) {
+			// Get the node which has the webhook defined to know where to start from and to get additional data
 			const node = workflow.getNode(webhookData.node) as INode;
 			node.name = webhookData.node;
 
@@ -195,13 +192,11 @@ export class TestWebhooks extends AbstractWebhooks<RegisteredTestWebhook> {
 			}
 
 			// Get the node which has the webhook defined to know where to start from and to get additional data
-			const startNode = workflow.getNode(webhookData.node) as INode;
 			const pathOrId = webhook.isDynamic ? webhook.webhookId! : webhook.webhookPath;
 			this.registerWebhook(pathOrId, webhook.method, {
 				isDynamic: webhook.isDynamic,
 				webhookPath: webhook.webhookPath,
-				workflowId: webhook.workflowId,
-				startNode,
+				node,
 				workflow,
 				description: webhookData.webhookDescription,
 				sessionId,

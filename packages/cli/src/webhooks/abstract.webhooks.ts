@@ -99,9 +99,22 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 		res: Response,
 	): Promise<WebhookResponseCallbackData>;
 
-	protected registerWebhook(pathOrId: string, method: IHttpRequestMethods, data: T) {
-		const webhookGroup = this.registered.get(pathOrId) ?? new Map();
-		webhookGroup.set(method, data);
+	protected registerWebhook(
+		pathOrId: string,
+		method: IHttpRequestMethods,
+		data: Omit<T, 'nodeType'>,
+	) {
+		const { node } = data;
+		const nodeType = this.nodeTypes.getByNameAndVersion(node.type, node.typeVersion);
+		if (nodeType === undefined) {
+			throw new InternalServerError(`The type of the webhook node "${node.name}" is not known`);
+		} else if (nodeType.webhook === undefined) {
+			throw new InternalServerError(`The node "${node.name}" does not have any webhooks defined.`);
+		}
+
+		const webhookGroup = this.registered.get(pathOrId) ?? new Map<IHttpRequestMethods, T>();
+		const webhook = { ...data, nodeType } as T;
+		webhookGroup.set(method, webhook);
 		this.registered.set(pathOrId, webhookGroup);
 		// TODO: update these on redis, and publish a message for others to pull the cache
 	}
@@ -144,28 +157,16 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 	}
 
 	protected async startWebhookExecution(
-		workflow: Workflow,
-		webhookDescription: IWebhookDescription,
-		workflowData: IWorkflowDb,
-		startNode: INode,
-		sessionId: string | undefined,
-		runExecutionData: IRunExecutionData | undefined,
-		executionId: string | undefined,
+		webhook: T,
 		req: WebhookRequest,
 		res: Response,
+		workflowData: IWorkflowDb,
 		responseCallback: (error: Error | null, data: WebhookResponseCallbackData) => void,
+		runExecutionData?: IRunExecutionData,
+		executionId?: string,
 		destinationNode?: string,
 	): Promise<string | undefined> {
-		const nodeType = this.nodeTypes.getByNameAndVersion(startNode.type, startNode.typeVersion);
-		if (nodeType === undefined) {
-			throw new InternalServerError(
-				`The type of the webhook node "${startNode.name}" is not known`,
-			);
-		} else if (nodeType.webhook === undefined) {
-			throw new InternalServerError(
-				`The node "${startNode.name}" does not have any webhooks defined.`,
-			);
-		}
+		const { node, workflow, description: webhookDescription, nodeType } = webhook;
 
 		const { executionMode } = this;
 
@@ -191,7 +192,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 
 		// Get the responseMode
 		const responseMode = workflow.expression.getSimpleParameterValue(
-			startNode,
+			node,
 			webhookDescription.responseMode,
 			executionMode,
 			additionalData.timezone,
@@ -201,7 +202,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 		) as WebhookResponseMode;
 
 		const responseCode = workflow.expression.getSimpleParameterValue(
-			startNode,
+			node,
 			webhookDescription.responseCode,
 			executionMode,
 			additionalData.timezone,
@@ -211,7 +212,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 		) as number;
 
 		const responseData = workflow.expression.getSimpleParameterValue(
-			startNode,
+			node,
 			webhookDescription.responseData,
 			executionMode,
 			additionalData.timezone,
@@ -234,7 +235,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 		additionalData.httpResponse = res;
 
 		const binaryData = workflow.expression.getSimpleParameterValue(
-			startNode,
+			node,
 			'={{$parameter["options"]["binaryData"]}}',
 			executionMode,
 			additionalData.timezone,
@@ -277,13 +278,13 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 			try {
 				webhookResultData = await workflow.runWebhook(
 					webhookDescription.name,
-					startNode,
+					node,
 					nodeType as WebhookNodeType,
 					additionalData,
 					NodeExecuteFunctions,
 					executionMode,
 				);
-				Container.get(EventsService).emit('nodeFetchedData', workflow.id, startNode);
+				Container.get(EventsService).emit('nodeFetchedData', workflow.id, node);
 			} catch (err) {
 				// Send error response to webhook caller
 				const errorMessage = 'Workflow Webhook Error: Workflow could not be started!';
@@ -294,7 +295,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 				runExecutionDataMerge = {
 					resultData: {
 						runData: {},
-						lastNodeExecuted: startNode.name,
+						lastNodeExecuted: node.name,
 						error: {
 							...err,
 							message: err.message,
@@ -320,7 +321,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 
 			if (webhookDescription.responseHeaders !== undefined) {
 				const responseHeaders = workflow.expression.getComplexParameterValue(
-					startNode,
+					node,
 					webhookDescription.responseHeaders,
 					executionMode,
 					additionalData.timezone,
@@ -408,7 +409,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 			// Initialize the data of the webhook node
 			const nodeExecutionStack: IExecuteData[] = [];
 			nodeExecutionStack.push({
-				node: startNode,
+				node,
 				data: {
 					main: webhookResultData.workflowData,
 				},
@@ -448,10 +449,12 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 			const runData: IWorkflowExecutionDataProcess = {
 				executionMode,
 				executionData: runExecutionData,
-				sessionId,
 				workflowData,
 				userId: user.id,
 			};
+			if ('sessionId' in webhook) {
+				runData.sessionId = webhook.sessionId as string;
+			}
 
 			let responsePromise: IDeferredPromise<IN8nHttpFullResponse> | undefined;
 			if (responseMode === 'responseNode') {
@@ -594,7 +597,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 								data = returnData.data!.main[0]![0].json;
 
 								const responsePropertyName = workflow.expression.getSimpleParameterValue(
-									startNode,
+									node,
 									webhookDescription.responsePropertyName,
 									executionMode,
 									additionalData.timezone,
@@ -608,7 +611,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 								}
 
 								const responseContentType = workflow.expression.getSimpleParameterValue(
-									startNode,
+									node,
 									webhookDescription.responseContentType,
 									executionMode,
 									additionalData.timezone,
@@ -654,7 +657,7 @@ export abstract class AbstractWebhooks<T extends RegisteredWebhook> {
 								}
 
 								const responseBinaryPropertyName = workflow.expression.getSimpleParameterValue(
-									startNode,
+									node,
 									webhookDescription.responseBinaryPropertyName,
 									executionMode,
 									additionalData.timezone,

@@ -37,14 +37,14 @@ export class WaitingWebhooks extends AbstractWebhooks<RegisteredWaitingWebhook> 
 
 	async executeWebhook(
 		webhook: RegisteredWaitingWebhook,
-		req: WaitingWebhookRequest,
-		res: Response,
+		request: WaitingWebhookRequest,
+		response: Response,
 	): Promise<WebhookResponseCallbackData> {
-		const { path: executionId, suffix } = req.params;
-		Logger.debug(`Received waiting-webhook "${req.method}" for execution "${executionId}"`);
+		const { path: executionId, suffix } = request.params;
+		Logger.debug(`Received waiting-webhook "${request.method}" for execution "${executionId}"`);
 
 		// Reset request parameters
-		req.params = {} as WaitingWebhookRequest['params'];
+		request.params = {} as WaitingWebhookRequest['params'];
 
 		const execution = await this.executionRepository.findSingleExecution(executionId, {
 			includeData: true,
@@ -99,7 +99,7 @@ export class WaitingWebhooks extends AbstractWebhooks<RegisteredWaitingWebhook> 
 		const additionalData = await WorkflowExecuteAdditionalData.getBase(workflowOwner.id);
 		const webhookData = NodeHelpers.getNodeWebhooks(workflow, startNode, additionalData).find(
 			(w) =>
-				w.httpMethod === req.method &&
+				w.httpMethod === request.method &&
 				w.path === (suffix ?? '') &&
 				w.webhookDescription.restartWebhook === true,
 		);
@@ -115,19 +115,16 @@ export class WaitingWebhooks extends AbstractWebhooks<RegisteredWaitingWebhook> 
 
 		return new Promise((resolve, reject) => {
 			void this.startWebhookExecution(
-				workflow,
-				webhookData.webhookDescription,
+				webhook,
+				request,
+				response,
 				workflowData as IWorkflowDb,
-				startNode,
-				undefined,
-				runExecutionData,
-				execution.id,
-				req,
-				res,
 				(error: Error | null, data: object) => {
 					if (error !== null) reject(error);
 					else resolve(data);
 				},
+				runExecutionData,
+				execution.id,
 			);
 		});
 	}
